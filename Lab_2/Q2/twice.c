@@ -3,6 +3,8 @@
 #include<sys/wait.h>
 #include <unistd.h>
 
+// Program to print twice of a given number
+
 int main(int argc, char *argv[])
 {
     int num = atoi(argv[argc-1]);
