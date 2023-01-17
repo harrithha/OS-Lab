@@ -7,7 +7,7 @@
 int main()
 {
     char message[] = "Hello World";
-    setbuf(stdout, NULL);
+    //setbuf(stdout, NULL);
     for (int i = 0; i < strlen(message); i++)
     {
         int childPid = fork();
