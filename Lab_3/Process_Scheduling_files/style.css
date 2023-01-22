@@ -1,0 +1,17 @@
+.make-bold {
+	font-weight: bold;	
+}
+@media (min-width: 768px) {
+.my-custom-container{
+    width:600px;
+}}
+
+@media (min-width: 992px) {
+.my-custom-container{
+    width:720px;
+}}
+
+@media (min-width: 1200px) {
+.my-custom-container{
+    width:900px;
+}}
