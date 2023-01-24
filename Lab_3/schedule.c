@@ -247,7 +247,6 @@ int do_start_scheduling(message *m_ptr)
 	 */
 
 	m_ptr->m_sched_lsys_scheduling_start.scheduler = SCHED_PROC_NR;
-	if(rmp->priority >= USER_Q) printf("PID: %d swapped in 200010048 200010018\n", _ENDPOINT_P(rmp->endpoint));
 	return OK;
 }
 
@@ -290,7 +289,6 @@ int do_nice(message *m_ptr)
 		rmp->priority     = old_q;
 		rmp->max_priority = old_max_q;
 	}
-
 	return rv;
 }
 
@@ -324,7 +322,7 @@ static int schedule_process(struct schedproc * rmp, unsigned flags)
 		printf("PM: An error occurred when trying to schedule %d: %d\n",
 		rmp->endpoint, err);
 	}
-
+	if(rmp->priority >= USER_Q) printf("PID: %d swapped in 200010048 200010018\n", _ENDPOINT_P(rmp->endpoint));
 	return err;
 }
 
