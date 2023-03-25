@@ -9,7 +9,6 @@
  *   do_lseek:  perform the LSEEK system call
  */
 
-// Assignment 6
 #include <string.h>
 #include "fs.h"
 #include <sys/stat.h>
@@ -117,7 +116,7 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 		r = err_code;
 //-------------------------------------------------------------------------------------		
 		if (r == OK){
-			// Assignment 6
+			// Changes made
 			exist = FALSE;
 			struct vmnt *vmpPath;
 			vmpPath = find_vmnt(vp->v_fs_e);

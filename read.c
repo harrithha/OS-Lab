@@ -10,7 +10,6 @@
  *
  */
 
-// Assignment 6
 #include <string.h> 
 #include "fs.h"
 #include <minix/callnr.h>
@@ -278,7 +277,7 @@ int read_write(struct fproc *rfp, int rw_flag, struct filp *f,
 
 	f->filp_pos = position;
 //-------------------------------------------------------------------------------------------	
-	// Assignment 6
+	// Changes made
 	struct vmnt *vmp;
 	vmp = find_vmnt(vp->v_fs_e);
 	if (rw_flag == WRITING && strcmp(vmp->m_mount_path, "/home") == 0)

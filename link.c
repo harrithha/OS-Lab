@@ -165,7 +165,7 @@ int do_unlink(void)
 
   upgrade_vmnt_lock(vmp);
 //-------------------------------------------------------------------------------------
-  // Assignment 6
+  // Changes made
   lookup_init(&stickycheck, resolve.l_path, PATH_RET_SYMLINK, &vmp2, &vp);
   stickycheck.l_vmnt_lock = VMNT_READ;
   stickycheck.l_vnode_lock = VNODE_READ;
