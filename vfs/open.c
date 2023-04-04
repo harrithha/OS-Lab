@@ -9,7 +9,6 @@
  *   do_lseek:  perform the LSEEK system call
  */
 
-#include <string.h>
 #include "fs.h"
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -27,6 +26,13 @@
 #include "vnode.h"
 #include "vmnt.h"
 #include "path.h"
+#include <stdio.h>
+#include <string.h>
+
+/*---------------------------------------------------------*/
+/* LAB-10*/
+#define IMM_FILE (0110000 & S_IFMT) // IMM_FILE = 36864
+/*---------------------------------------------------------*/
 
 static char mode_map[] = {R_BIT, W_BIT, R_BIT | W_BIT, 0};
 
@@ -111,32 +117,39 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 	/* If O_CREATE is set, try to make the file. */
 	if (oflags & O_CREAT)
 	{
-		omode = I_REGULAR | (omode & ALLPERMS & fp->fp_umask);
+		/*---------------------------------------------------------------------------------*/
+		/*LAB-10*/
+		omode = I_IMM | (omode & ALLPERMS & fp->fp_umask);
+		/*---------------------------------------------------------------------------------*/
 		vp = new_node(&resolve, oflags, omode);
 		r = err_code;
-//-------------------------------------------------------------------------------------		
-		if (r == OK){
-			// Changes made
-			exist = FALSE;
-			struct vmnt *vmpPath;
-			vmpPath = find_vmnt(vp->v_fs_e);
-			if (strcmp(vmpPath->m_mount_path, "/home") == 0)
-				printf("file created: %llu\n", vp->v_inode_nr);
-		}
-//-------------------------------------------------------------------------------------
 
-		else if (r != EEXIST){ /* other error */
+		if (r == OK)
+		{
+			exist = FALSE; /* We just created the file */
+
+			/*---------------------------------------------------------------------------------*/
+			/* Lab 9 */
+			struct vmnt *virtual_mount;
+			virtual_mount = find_vmnt(vp->v_fs_e);
+			int compare_mount = strcmp(virtual_mount->m_mount_path, "/home");
+			if (compare_mount == 0)
+			{
+				printf("Minix3: Immediate file created: %llu\n", vp->v_inode_nr);
+			}
+			/*---------------------------------------------------------------------------------*/
+		}
+		else if (r != EEXIST)
+		{ /* other error */
 			if (vp)
 				unlock_vnode(vp);
 			unlock_filp(filp);
 			return (r);
 		}
-
 		else
 			exist = !(oflags & O_EXCL); /* file exists, if the O_EXCL
-					   flag is set this is an error */
+						   flag is set this is an error */
 	}
-
 	else
 	{
 		/* Scan path name */
@@ -170,6 +183,9 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 			switch (vp->v_mode & S_IFMT)
 			{
 			case S_IFREG:
+			/*------------------------------------------------*/
+			/*LAB-10*/
+			case IMM_FILE:
 				/* Truncate regular file if O_TRUNC. */
 				if (oflags & O_TRUNC)
 				{
@@ -179,6 +195,7 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 					truncate_vnode(vp, 0);
 				}
 				break;
+			/*------------------------------------------------*/
 			case S_IFDIR:
 				/* Directories may be read but not written. */
 				r = (bits & W_BIT ? EISDIR : OK);
@@ -189,7 +206,7 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 				/* TTY needs to know about the O_NOCTTY flag. */
 				r = cdev_open(dev, bits | (oflags & O_NOCTTY));
 				vp = filp->filp_vno; /* Might be updated by
-						 * cdev_open after cloning */
+									  * cdev_open after cloning */
 				break;
 			case S_IFBLK:
 
@@ -215,9 +232,9 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 				}
 
 				/* Check whether the device is mounted or not. If so,
-			 * then that FS is responsible for this device.
-			 * Otherwise we default to ROOT_FS.
-			 */
+				 * then that FS is responsible for this device.
+				 * Otherwise we default to ROOT_FS.
+				 */
 				vp->v_bfs_e = ROOT_FS_E; /* By default */
 				for (vmp = &vmnt[0]; vmp < &vmnt[NR_MNTS]; ++vmp)
 					if (vmp->m_dev == vp->v_sdev &&
@@ -227,11 +244,11 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 					}
 
 				/* Send the driver label to the file system that will
-			 * handle the block I/O requests (even when its label
-			 * and endpoint are known already), but only when it is
-			 * the root file system. Other file systems will
-			 * already have it anyway.
-			 */
+				 * handle the block I/O requests (even when its label
+				 * and endpoint are known already), but only when it is
+				 * the root file system. Other file systems will
+				 * already have it anyway.
+				 */
 				if (vp->v_bfs_e != ROOT_FS_E)
 				{
 					unlock_bsf();
@@ -250,7 +267,7 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 
 			case S_IFIFO:
 				/* Create a mapped inode on PFS which handles reads
-			   and writes to this named pipe. */
+				   and writes to this named pipe. */
 				upgrade_vnode_lock(vp);
 				r = map_vnode(vp, PFS_PROC_NR);
 				if (r == OK)
@@ -270,9 +287,9 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 				if (r != ENXIO)
 				{
 					/* See if someone else is doing a rd or wt on
-				 * the FIFO.  If so, use its filp entry so the
-				 * file position will be automatically shared.
-				 */
+					 * the FIFO.  If so, use its filp entry so the
+					 * file position will be automatically shared.
+					 */
 					b = (bits & R_BIT ? R_BIT : W_BIT);
 					filp->filp_count = 0; /* don't find self */
 					if ((filp2 = find_filp(vp, b)) != NULL)
@@ -284,11 +301,11 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 						filp2->filp_flags = oflags;
 
 						/* v_count was incremented after the vnode
-				     * has been found. i_count was incremented
-				     * incorrectly in FS, not knowing that we
-				     * were going to use an existing filp
-				     * entry.  Correct this error.
-				     */
+						 * has been found. i_count was incremented
+						 * incorrectly in FS, not knowing that we
+						 * were going to use an existing filp
+						 * entry.  Correct this error.
+						 */
 						unlock_vnode(vp);
 						put_vnode(vp);
 					}
@@ -330,10 +347,10 @@ int common_open(char path[PATH_MAX], int oflags, mode_t omode)
 static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 {
 	/* Try to create a new inode and return a pointer to it. If the inode already
-   exists, return a pointer to it as well, but set err_code accordingly.
-   NULL is returned if the path cannot be resolved up to the last
-   directory, or when the inode cannot be created due to permissions or
-   otherwise. */
+	   exists, return a pointer to it as well, but set err_code accordingly.
+	   NULL is returned if the path cannot be resolved up to the last
+	   directory, or when the inode cannot be created due to permissions or
+	   otherwise. */
 	struct vnode *dirp, *vp;
 	struct vmnt *dir_vmp, *vp_vmp;
 	int r;
@@ -348,7 +365,7 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 	findnode.l_vnode_lock = VNODE_WRITE; /* dir node */
 
 	/* When O_CREAT and O_EXCL flags are set, the path may not be named by a
-   * symbolic link. */
+	 * symbolic link. */
 	if (oflags & O_EXCL)
 		findnode.l_flags |= PATH_RET_SYMLINK;
 
@@ -362,12 +379,12 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 	findnode.l_vnode_lock = (oflags & O_TRUNC) ? VNODE_WRITE : VNODE_OPCL;
 	vp = advance(dirp, &findnode, fp);
 	assert(vp_vmp == NULL); /* Lookup to last dir should have yielded lock
-				 * on vmp or final component does not exist.
-				 * Either way, vp_vmp ought to be not set.
-				 */
+							 * on vmp or final component does not exist.
+							 * Either way, vp_vmp ought to be not set.
+							 */
 
 	/* The combination of a symlink with absolute path followed by a danglink
-   * symlink results in a new path that needs to be re-resolved entirely. */
+	 * symlink results in a new path that needs to be re-resolved entirely. */
 	if (path[0] == '/')
 	{
 		unlock_vnode(dirp);
@@ -401,8 +418,8 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 							fp->fp_effgid, path, &res)) != OK)
 		{
 			/* Can't create inode either due to permissions or some other
-		 * problem. In case r is EEXIST, we might be dealing with a
-		 * dangling symlink.*/
+			 * problem. In case r is EEXIST, we might be dealing with a
+			 * dangling symlink.*/
 
 			/* Downgrade lock to prevent deadlock during symlink resolving*/
 			downgrade_vmnt_lock(dir_vmp);
@@ -445,11 +462,11 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 				}
 
 				/* Try to create the inode the dangling symlink was
-			 * pointing to. We have to use dirp as starting point
-			 * as there might be multiple successive symlinks
-			 * crossing multiple mountpoints.
-			 * Unlock vnodes and vmnts as we're going to recurse.
-			 */
+				 * pointing to. We have to use dirp as starting point
+				 * as there might be multiple successive symlinks
+				 * crossing multiple mountpoints.
+				 * Unlock vnodes and vmnts as we're going to recurse.
+				 */
 				unlock_vnode(dirp);
 				unlock_vnode(vp);
 				unlock_vmnt(dir_vmp);
@@ -470,8 +487,8 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 
 			if (r == EEXIST)
 				err_code = EIO; /* Impossible, we have verified that
-					 * the last component doesn't exist and
-					 * is not a dangling symlink. */
+								 * the last component doesn't exist and
+								 * is not a dangling symlink. */
 			else
 				err_code = r;
 
@@ -502,7 +519,7 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 		if (vp != NULL)
 		{
 			r = EEXIST; /* File exists or a symlink names a file while
-				 * O_EXCL is set. */
+						 * O_EXCL is set. */
 		}
 		else
 			r = err_code; /* Other problem. */
@@ -510,8 +527,8 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 
 	err_code = r;
 	/* When dirp equals vp, we shouldn't release the lock as a vp is locked only
-   * once. Releasing the lock would cause the resulting vp not be locked and
-   * cause mayhem later on. */
+	 * once. Releasing the lock would cause the resulting vp not be locked and
+	 * cause mayhem later on. */
 	if (dirp != vp)
 	{
 		unlock_vnode(dirp);
@@ -529,10 +546,10 @@ static struct vnode *new_node(struct lookup *resolve, int oflags, mode_t bits)
 static int pipe_open(struct vnode *vp, mode_t bits, int oflags)
 {
 	/*  This function is called from common_open. It checks if
- *  there is at least one reader/writer pair for the pipe, if not
- *  it suspends the caller, otherwise it revives all other blocked
- *  processes hanging on the pipe.
- */
+	 *  there is at least one reader/writer pair for the pipe, if not
+	 *  it suspends the caller, otherwise it revives all other blocked
+	 *  processes hanging on the pipe.
+	 */
 
 	if ((bits & (R_BIT | W_BIT)) == (R_BIT | W_BIT))
 		return (ENXIO);
@@ -760,7 +777,8 @@ int do_close(void)
 /*===========================================================================*
  *				close_fd				     *
  *===========================================================================*/
-int close_fd(rfp, fd_nr) struct fproc *rfp;
+int close_fd(rfp, fd_nr)
+struct fproc *rfp;
 int fd_nr;
 {
 	/* Perform the close(fd) system call. */
@@ -776,8 +794,8 @@ int fd_nr;
 	vp = rfilp->filp_vno;
 
 	/* first, make all future get_filp2()'s fail; otherwise
-   * we might try to close the same fd in different threads
-   */
+	 * we might try to close the same fd in different threads
+	 */
 	rfp->fp_filp[fd_nr] = NULL;
 
 	close_filp(rfilp);

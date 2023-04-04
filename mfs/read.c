@@ -18,8 +18,12 @@ static struct buf *rahead(struct inode *rip, block_t baseblock, u64_t
 static int rw_chunk(struct inode *rip, u64_t position, unsigned off,
 	size_t chunk, unsigned left, int rw_flag, cp_grant_id_t gid, unsigned
 	buf_off, unsigned int block_size, int *completed);
-//------------Lab-7-------------------------------------
-static void removeInodeEntry(struct inode *rip);
+
+/*--------------------------------------------*/
+/*LAB-10*/
+static void remove_inode_entry(struct inode *rip);
+/*--------------------------------------------*/
+
 
 /*===========================================================================*
  *				fs_readwrite				     *
@@ -35,7 +39,11 @@ int fs_readwrite(void)
   int completed;
   struct inode *rip;
   size_t nrbytes;
-  int immediate=0;
+
+  /*---------------*/
+  /*LAB-10*/
+  int immediate = 0;
+  /*---------------*/
   
   r = OK;
   
@@ -44,7 +52,7 @@ int fs_readwrite(void)
 	return(EINVAL);
 
   mode_word = rip->i_mode & I_TYPE;
-  regular = (mode_word == I_REGULAR || mode_word == I_NAMED_PIPE || mode_word==I_IMMEDIATE);
+  regular = (mode_word == I_REGULAR || mode_word == I_NAMED_PIPE || mode_word == I_IMM);
   block_spec = (mode_word == I_BLOCK_SPECIAL ? 1 : 0);
   
   /* Determine blocksize */
@@ -91,85 +99,105 @@ int fs_readwrite(void)
 		return EROFS;
 	      
   cum_io = 0;
-//------------Lab-7-------------------------------------
-  if(mode_word == I_IMMEDIATE) {
-    if(rw_flag == WRITING) {
-      if(position + nrbytes > 32) {
-        int i;
-        int post = 0;
-        char* temp_bytes;
-        char buffer[40];// Max 40 bytes as 10 u32 i_zones present
-        register struct buf* bp;
-        
-        for(i = 0; i < f_size; ++i) {// Copy file data in i_zones to buffer.
-          if(i%4 == 0)
-            temp_bytes = (char*)rip->i_zone + i;
-          buffer[i] = temp_bytes[i%4];
-        }
-        removeInodeEntry(rip);
-        rip->i_mode = (I_REGULAR | (rip->i_mode & ALL_MODES));
-        mode_word = rip->i_mode & I_TYPE;
-        if((bp = new_block(rip, (off_t) ex64lo(post))) == NULL)
-          return(err_code);
-        for(i = 0; i < f_size; ++i) {
-          ((char*)bp->data)[i] = buffer[i];
-        }
-        MARKDIRTY(bp);
-        put_block(bp, PARTIAL_DATA_BLOCK);
-      }
-      else{
-        immediate = 1;
-      }
-    }
-    else {
-      if(position >= f_size)
-        immediate = 0;
-      else
-        immediate = 1;
-    }
+
+/*----------------------------------------------------*/
+/*LAB-10*/
+
+  if (mode_word == I_IMM)
+  {
+		if (rw_flag == WRITING)
+		{
+		  if (position + nrbytes > 32)
+		  {
+			  int i;
+			  int post = 0;
+			  char *temp_bytes;
+			  char buffer[40]; // Max 40 bytes as 10 u32 i_zones present
+			  register struct buf *bp;
+
+			  for (i = 0; i < f_size; ++i)
+			  { // Copy file data in i_zones to buffer.
+				  if (i % 4 == 0)
+					  temp_bytes = (char *)rip->i_zone + i;
+				  buffer[i] = temp_bytes[i % 4];
+			  }
+				remove_inode_entry(rip);
+			  rip->i_mode = (I_REGULAR | (rip->i_mode & ALL_MODES));
+			  mode_word = rip->i_mode & I_TYPE;
+			  if ((bp = new_block(rip, (off_t)ex64lo(post))) == NULL)
+				  return (err_code);
+			  for (i = 0; i < f_size; ++i)
+			  {
+				  ((char *)bp->data)[i] = buffer[i];
+			  }
+			  MARKDIRTY(bp);
+			  put_block(bp, PARTIAL_DATA_BLOCK);
+		  }
+		  else
+		  {
+			  immediate = 1;
+		  }
+		}
+		else
+		{
+		  if (position >= f_size)
+			  immediate = 0;
+		  else
+			  immediate = 1;
+		}
   }
 
-  if(immediate == 1) {
-    if(rw_flag == READING) {
-      printf("Minix3: Reading from Immediate File.\n");
-      r = sys_safecopyto(VFS_PROC_NR, gid, (vir_bytes)cum_io,(vir_bytes) rip->i_zone,(size_t) f_size);
-      
-      int i;
-      int post = 0;
-      char* temp_bytes;
-      char buffer[40];// Max 40 bytes as 10 u32 i_zones present
-      for(i=0; i<f_size; ++i) {// Copy file data in i_zones to buffer.
-        if(i%4 == 0)
-          temp_bytes = (char*)rip->i_zone + i;
-        buffer[i] = temp_bytes[i%4];
-      }
+  if (immediate == 1)
+  {
+		if (rw_flag == READING)
+		{
+		  printf("Minix3: Reading from Immediate File.\n");
+		  r = sys_safecopyto(VFS_PROC_NR, gid, (vir_bytes)cum_io, (vir_bytes)rip->i_zone, (size_t)f_size);
 
-      printf("Minix3: File Contentsof Immediate File:\n");
-      for(i = 0; i < f_size; ++i) {
-        printf("%c", buffer[i]);
-      }
-      printf("Minix3: EOF - Immediate File\n");
-      
-      if(r == OK) {
-        nrbytes=0;
-        cum_io += f_size;
-        position += f_size;
-      }
-    }
-    else {
-      printf("Minix3: Writing to Immediate File.\n");
-      vir_bytes zone;
-      zone = (vir_bytes) rip->i_zone;
-      r = sys_safecopyfrom(VFS_PROC_NR, gid, (vir_bytes)cum_io, zone+position, (size_t) nrbytes);
-      IN_MARKDIRTY(rip);
-      if(r == OK) {
-        cum_io += nrbytes;
-        position += (off_t)nrbytes;
-        nrbytes = 0;
-      }
-    }
+		  int i;
+		  int post = 0;
+		  char *temp_bytes;
+		  char buffer[40]; // Max 40 bytes as 10 u32 i_zones present
+		  for (i = 0; i < f_size; ++i)
+		  { // Copy file data in i_zones to buffer.
+			  if (i % 4 == 0)
+				  temp_bytes = (char *)rip->i_zone + i;
+			  buffer[i] = temp_bytes[i % 4];
+		  }
+
+		  printf("Minix3: File Contents of Immediate File:\n");
+		  for (i = 0; i < f_size; ++i)
+		  {
+			  printf("%c", buffer[i]);
+		  }
+		  printf("Minix3: EOF - Immediate File\n");
+
+		  if (r == OK)
+		  {
+			  nrbytes = 0;
+			  cum_io += f_size;
+			  position += f_size;
+		  }
+		}
+		else
+		{
+		  printf("Minix3: Writing to Immediate File.\n");
+		  vir_bytes zone;
+		  zone = (vir_bytes)rip->i_zone;
+		  r = sys_safecopyfrom(VFS_PROC_NR, gid, (vir_bytes)cum_io, zone + position, (size_t)nrbytes);
+		  IN_MARKDIRTY(rip);
+		  if (r == OK)
+		  {
+			  cum_io += nrbytes;
+			  position += (off_t)nrbytes;
+			  nrbytes = 0;
+			
+		  }
+		}
+	
   }
-//------------End of Lab-7-------------------------------------
+
+/*----------------------------------------------------*/
 
   /* Split the transfer into chunks that don't span two blocks. */
   while (nrbytes > 0) {
@@ -224,21 +252,32 @@ int fs_readwrite(void)
   
   return(r);
 }
-//------------Lab-7-------------------------------------
+
+
+
+
+/*------------------------------------------------*/
+/*LAB-10*/
 /*===========================================================================*
- *				removeInodeEntry			     *
+ *				remove_inode_entry				     *
  *===========================================================================*/
-static void removeInodeEntry(rip)
-register struct inode *rip; /*inode to be erased */
+
+static void remove_inode_entry(rip) register struct inode *rip; /* The Inode that we want to erase*/
 {
   register int i;
   rip->i_size = 0;
-  rip->i_update = ATIME | CTIME | MTIME; 
+  rip->i_update = ATIME | CTIME | MTIME;
   IN_MARKDIRTY(rip);
-  for(i = 0; i < V2_NR_TZONES; ++i)
-    rip->i_zone[i] = NO_ZONE;
+  for(i=0; i<V2_NR_TZONES; i++){
+	  rip->i_zone[i] = NO_ZONE;
+  }
 }
-//------------Lab-7-------------------------------------
+/*------------------------------------------------*/
+
+
+
+
+
 /*===========================================================================*
  *				fs_breadwrite				     *
  *===========================================================================*/

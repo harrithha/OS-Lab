@@ -10,7 +10,6 @@
  *
  */
 
-#include <string.h> 
 #include "fs.h"
 #include <minix/callnr.h>
 #include <minix/com.h>
@@ -24,6 +23,8 @@
 #include "scratchpad.h"
 #include "vnode.h"
 #include "vmnt.h"
+#include <stdio.h>
+#include <string.h>
 
 /*===========================================================================*
  *				do_read					     *
@@ -190,23 +191,23 @@ int read_write(struct fproc *rfp, int rw_flag, struct filp *f,
 		else if (r == SUSPEND)
 		{
 			/* FIXME: multiple read/write operations on a single filp
-		 * should be serialized. They currently aren't; in order to
-		 * achieve a similar effect, we optimistically advance the file
-		 * position here. This works under the following assumptions:
-		 * - character drivers that use the seek position at all,
-		 *   expose a view of a statically-sized range of bytes, i.e.,
-		 *   they are basically byte-granular block devices;
-		 * - if short I/O or an error is returned, all subsequent calls
-		 *   will return (respectively) EOF and an error;
-		 * - the application never checks its own file seek position,
-		 *   or does not care that it may end up having seeked beyond
-		 *   the number of bytes it has actually read;
-		 * - communication to the character driver is FIFO (this one
-		 *   is actually true! whew).
-		 * Many improvements are possible here, but in the end,
-		 * anything short of queuing concurrent operations will be
-		 * suboptimal - so we settle for this hack for now.
-		 */
+			 * should be serialized. They currently aren't; in order to
+			 * achieve a similar effect, we optimistically advance the file
+			 * position here. This works under the following assumptions:
+			 * - character drivers that use the seek position at all,
+			 *   expose a view of a statically-sized range of bytes, i.e.,
+			 *   they are basically byte-granular block devices;
+			 * - if short I/O or an error is returned, all subsequent calls
+			 *   will return (respectively) EOF and an error;
+			 * - the application never checks its own file seek position,
+			 *   or does not care that it may end up having seeked beyond
+			 *   the number of bytes it has actually read;
+			 * - communication to the character driver is FIFO (this one
+			 *   is actually true! whew).
+			 * Many improvements are possible here, but in the end,
+			 * anything short of queuing concurrent operations will be
+			 * suboptimal - so we settle for this hack for now.
+			 */
 			position += size;
 		}
 	}
@@ -276,22 +277,29 @@ int read_write(struct fproc *rfp, int rw_flag, struct filp *f,
 	}
 
 	f->filp_pos = position;
-//-------------------------------------------------------------------------------------------	
-	// Changes made
-	struct vmnt *vmp;
-	vmp = find_vmnt(vp->v_fs_e);
-	if (rw_flag == WRITING && strcmp(vmp->m_mount_path, "/home") == 0)
-		printf("file written: %llu; nbytes = %zu; offset = %llu\n", vp->v_inode_nr, size, f->filp_pos);
 
-	if (rw_flag == READING && strcmp(vmp->m_mount_path, "/home") == 0)
-		printf("file read: %llu; nbytes = %zu; offset = %llu\n", vp->v_inode_nr, size, f->filp_pos);
-//-------------------------------------------------------------------------------------------
+	/*-----------------------------------------------------------------------------------*/
+	/* Lab 9 */
+
+	struct vmnt *virtual_mount;
+	virtual_mount = find_vmnt(vp->v_fs_e);
+	int compare_mount = strcmp(virtual_mount->m_mount_path, "/home");
+
+	if (rw_flag == WRITING && compare_mount == 0)
+	{
+		printf("Minix3: file write: %llu; nbytes = %d; offset = %llu\n", vp->v_inode_nr, size, position);
+	}
+	else if (rw_flag == READING && compare_mount == 0)
+	{
+		printf("Minix3: file read: %llu; nbytes = %d; offset = %llu\n", vp->v_inode_nr, size, position);
+	}
+	/*---------------------------------------------------------------------------------*/
 
 	if (r == EPIPE && rw_flag == WRITING)
 	{
 		/* Process is writing, but there is no reader. Tell the kernel to
-	 * generate s SIGPIPE signal.
-	 */
+		 * generate s SIGPIPE signal.
+		 */
 		if (!(f->filp_flags & O_NOSIGPIPE))
 		{
 			sys_kill(rfp->fp_endpoint, SIGPIPE);
@@ -345,7 +353,8 @@ int do_getdents(void)
 /*===========================================================================*
  *				rw_pipe					     *
  *===========================================================================*/
-int rw_pipe(rw_flag, usr_e, f, buf, req_size) int rw_flag; /* READING or WRITING */
+int rw_pipe(rw_flag, usr_e, f, buf, req_size)
+int rw_flag; /* READING or WRITING */
 endpoint_t usr_e;
 struct filp *f;
 vir_bytes buf;
@@ -411,8 +420,8 @@ size_t req_size;
 		if (!(oflags & O_NONBLOCK))
 		{
 			/* partial write on pipe with req_size > PIPE_SIZE,
-		 * non-atomic
-		 */
+			 * non-atomic
+			 */
 			fp->fp_cum_io_partial = cum_io;
 			pipe_suspend(f, buf, req_size);
 			return (SUSPEND);
